@@ -1,6 +1,7 @@
 (() => {
   'use strict';
 
+  const DEFAULT_API_BASE = 'https://youtube-mix.onrender.com';
   const API_KEY = 'studio-mix:api-url';
   const $ = (id) => document.getElementById(id);
   const apiUrl = $('apiUrl');
@@ -25,7 +26,8 @@
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   function getApiUrl() {
-    const value = localStorage.getItem(API_KEY) || '';
+    const custom = (localStorage.getItem(API_KEY) || '').trim();
+    const value = custom || DEFAULT_API_BASE;
     return value.replace(/\/+$/, '');
   }
 
@@ -44,12 +46,12 @@
 
   async function request(path, options = {}) {
     const base = getApiUrl();
-    if (!base) throw new Error("Configurez d'abord l'adresse de l'API avec le bouton ⚙.");
+    if (!base) throw new Error("Adresse d'API introuvable.");
     let response;
     try {
       response = await fetch(`${base}${path}`, options);
     } catch (_) {
-      throw new Error('API inaccessible. Verifiez son URL, son etat et la configuration CORS.');
+      throw new Error('API inaccessible. Si le backend Render etait en veille, il se reveille automatiquement (patientez ~30s et reessayez).');
     }
     if (!response.ok) {
       let detail = `Erreur HTTP ${response.status}`;
@@ -424,10 +426,18 @@
       notify("L'URL doit commencer par https:// ou http://.", true);
       return;
     }
-    try { value ? localStorage.setItem(API_KEY, value) : localStorage.removeItem(API_KEY); }
-    catch (_) { notify('Le stockage local est indisponible dans ce navigateur.', true); return; }
+    try {
+      if (value && value !== DEFAULT_API_BASE) {
+        localStorage.setItem(API_KEY, value);
+      } else {
+        localStorage.removeItem(API_KEY);
+      }
+    } catch (_) {
+      notify('Le stockage local est indisponible dans ce navigateur.', true);
+      return;
+    }
     $('settingsPanel').hidden = true;
-    notify(value ? "Adresse de l'API enregistree." : "Adresse de l'API effacee.");
+    notify("Adresse active : " + getApiUrl());
     loadLibrary();
   });
 
