@@ -413,6 +413,32 @@ def health():
     }
 
 
+@app.get("/debug/formats")
+def debug_formats(video_id: str = "WE8TinxNPb0"):
+    from yt_dlp import YoutubeDL
+    opts = _ytdlp_base_opts(quiet=True)
+    with YoutubeDL(opts) as ydl:
+        try:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            return {
+                "title": info.get("title"),
+                "cookies_found": bool(opts.get("cookiefile")),
+                "formats": [
+                    {
+                        "id": f.get("format_id"),
+                        "ext": f.get("ext"),
+                        "vcodec": f.get("vcodec"),
+                        "acodec": f.get("acodec"),
+                        "protocol": f.get("protocol"),
+                        "has_url": bool(f.get("url")),
+                    }
+                    for f in info.get("formats", [])
+                ],
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+
 @app.get("/library")
 def list_library():
     ensure_dirs()
