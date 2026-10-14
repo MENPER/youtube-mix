@@ -231,7 +231,7 @@ def _ytdlp_base_opts(quiet: bool = False) -> dict:
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv_embedded", "tv", "web_embedded", "android", "ios", "mweb"]
+                "player_client": ["ios", "android", "mweb", "web"]
             }
         },
     }
@@ -259,8 +259,11 @@ def extract_video_stream(url: str) -> dict:
             "/bestvideo[ext=mp4]"
             "/bestvideo[vcodec^=avc]"
             "/bestvideo"
+            "/best[height<=720]"
             "/18"
             "/best"
+            "/bv*"
+            "/b"
         ),
         "skip_download": True,
     }
@@ -316,8 +319,8 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
 
     opts = {
         **_ytdlp_base_opts(quiet=False),
-        # Best M4A/AAC first, fallback to any audio, fallback to format 18 (mp4 video+audio, FFmpeg strips video)
-        "format": "bestaudio[ext=m4a]/bestaudio/18/best",
+        # Best M4A/AAC first, fallback to any audio, fallback to format 18, ba, or b
+        "format": "bestaudio[ext=m4a]/bestaudio/best[height<=720]/18/best/ba/b",
         "outtmpl": raw_stem + ".%(ext)s",
         "max_filesize": YTDLP_MAX_FILESIZE,
         # No post-processing -- we handle that with FFmpeg ourselves
@@ -392,11 +395,20 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
 @app.get("/health")
 def health():
     try:
-        from yt_dlp import version as ytdlp_version  # noqa: F401
+        from yt_dlp import version as ytdlp_version
+        yt_version = ytdlp_version.__version__
         yt_status = "ok"
-    except ImportError:
+    except Exception:
+        yt_version = "unknown"
         yt_status = "not_installed"
-    return {"status": "ok", "youtube_import": yt_status}
+    cookie_path = init_cookies()
+    has_cookies = cookie_path is not None and cookie_path.is_file() and cookie_path.stat().st_size > 0
+    return {
+        "status": "ok",
+        "youtube_import": yt_status,
+        "ytdlp_version": yt_version,
+        "cookies_loaded": has_cookies,
+    }
 
 
 @app.get("/library")
