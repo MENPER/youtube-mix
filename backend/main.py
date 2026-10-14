@@ -231,7 +231,7 @@ def _ytdlp_base_opts(quiet: bool = False) -> dict:
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "extractor_args": {
             "youtube": {
-                "player_client": ["ios", "android", "mweb", "web"]
+                "player_client": ["ios", "mweb", "android", "web"]
             }
         },
     }
@@ -319,12 +319,14 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
 
     opts = {
         **_ytdlp_base_opts(quiet=False),
-        # Best M4A/AAC first, fallback to any audio, fallback to format 18, ba, or b
-        "format": "bestaudio[ext=m4a]/bestaudio/best[height<=720]/18/best/ba/b",
+        # Best audio stream, fallback to best overall stream (e.g. format 18)
+        "format": "bestaudio/best",
         "outtmpl": raw_stem + ".%(ext)s",
         "max_filesize": YTDLP_MAX_FILESIZE,
-        # No post-processing -- we handle that with FFmpeg ourselves
-        "postprocessors": [],
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "m4a",
+        }],
     }
 
     try:
