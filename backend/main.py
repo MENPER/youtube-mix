@@ -202,19 +202,43 @@ def _validate_yt_url(url: str, field: str = "url") -> str:
     return url.strip()
 
 
+def init_cookies() -> Path | None:
+    """Load or initialize cookies from environment or file."""
+    raw_cookies = os.getenv("YOUTUBE_COOKIES")
+    if raw_cookies and raw_cookies.strip():
+        target = Path(os.getenv("DATA_DIR", "/data")) / "cookies.txt"
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(raw_cookies.strip(), encoding="utf-8")
+            return target
+        except OSError:
+            pass
+    custom_path = Path(os.getenv("COOKIES_FILE", "/data/cookies.txt"))
+    if custom_path.is_file() and custom_path.stat().st_size > 0:
+        return custom_path
+    local_path = Path(__file__).parent / "cookies.txt"
+    if local_path.is_file() and local_path.stat().st_size > 0:
+        return local_path
+    return None
+
+
 def _ytdlp_base_opts(quiet: bool = False) -> dict:
     """Common yt-dlp options shared by all extraction calls."""
-    return {
+    opts = {
         "noplaylist": True,
         "quiet": quiet,
         "no_warnings": quiet,
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "mweb"]
+                "player_client": ["tv_embedded", "tv", "web_embedded", "android", "ios", "mweb"]
             }
         },
     }
+    cookie_path = init_cookies()
+    if cookie_path and cookie_path.is_file():
+        opts["cookiefile"] = str(cookie_path)
+    return opts
 
 
 def extract_video_stream(url: str) -> dict:
@@ -246,6 +270,12 @@ def extract_video_stream(url: str) -> dict:
             info = ydl.extract_info(url, download=False)
     except DownloadError as exc:
         msg = str(exc)
+        if "Sign in to confirm you" in msg or "bot" in msg.lower():
+            raise RuntimeError(
+                "YouTube bloque les serveurs cloud distants (anti-robot). "
+                "Solutions : 1) Renseignez vos cookies YouTube dans Render (variable YOUTUBE_COOKIES), "
+                "ou 2) Lancez le backend en local sur votre Mac sans aucune restriction."
+            ) from exc
         if "Private video" in msg or "This video is private" in msg:
             raise RuntimeError("Video privee ou inaccessible.") from exc
         if "Video unavailable" in msg or "has been removed" in msg or "This video is unavailable" in msg:
@@ -299,6 +329,12 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
             info = ydl.extract_info(url, download=True)
     except DownloadError as exc:
         msg = str(exc)
+        if "Sign in to confirm you" in msg or "bot" in msg.lower():
+            raise RuntimeError(
+                "YouTube bloque les serveurs cloud distants (anti-robot). "
+                "Solutions : 1) Renseignez vos cookies YouTube dans Render (variable YOUTUBE_COOKIES), "
+                "ou 2) Lancez le backend en local sur votre Mac sans aucune restriction."
+            ) from exc
         if "Private video" in msg or "This video is private" in msg:
             raise RuntimeError("Video privee ou inaccessible.") from exc
         if "Video unavailable" in msg or "has been removed" in msg or "This video is unavailable" in msg:
