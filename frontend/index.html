@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101114">
+  <meta name="description" content="Associez vos medias autorises dans un mix video lisible sur iPhone.">
+  <title>Studio Mix &mdash; Video &amp; audio</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Studio Mix, accueil"><span class="brand-mark">&#9618;</span><span>studio<span class="brand-light">mix</span></span></a>
+      <button class="icon-button" id="settingsToggle" type="button" aria-label="Configurer l'API" title="Configurer l'API">&#9881;</button>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow"><span class="pulse"></span> ATELIER AUDIOVISUEL</p>
+      <h1>Une image.<br><span>Votre ambiance.</span></h1>
+      <p class="lede">Assemblez vos propres medias en quelques instants. Pense pour le mobile, pret pour Safari.</p>
+    </section>
+
+    <section class="panel settings" id="settingsPanel" hidden>
+      <label for="apiUrl">Adresse de l'API</label>
+      <div class="inline-field"><input id="apiUrl" type="url" inputmode="url" placeholder="https://votre-api.hf.space" autocomplete="url"><button id="saveApi" class="button secondary" type="button">Enregistrer</button></div>
+      <p class="hint">Conservee uniquement dans ce navigateur.</p>
+    </section>
+
+    <!-- ===== MODE TABS ===== -->
+    <section class="panel form-panel" aria-labelledby="modeTitle">
+      <div class="section-heading"><span class="step">00</span><div><h2 id="modeTitle">Mode de creation</h2><p>Choisissez votre source video.</p></div></div>
+      <div class="tabs" role="tablist" aria-label="Mode de creation">
+        <button class="tab active" id="tabModeLocal" role="tab" aria-selected="true" type="button">Fichiers locaux</button>
+        <button class="tab" id="tabModeYoutube" role="tab" aria-selected="false" type="button">&#9654; YouTube</button>
+      </div>
+    </section>
+
+    <!-- ===== LOCAL MODE ===== -->
+    <section class="panel form-panel" id="localModePane" aria-labelledby="sourceTitle">
+      <div class="section-heading"><span class="step">01</span><div><h2 id="sourceTitle">Votre video</h2><p>Choisissez un fichier video sur votre appareil.</p></div></div>
+      <label class="file-drop" for="videoFile"><span class="file-icon">&#9635;</span><span class="file-copy"><strong id="videoName">Parcourir les fichiers</strong><small>MP4, MOV ou autre format lu par FFmpeg</small></span><span class="file-action">Choisir</span></label>
+      <input class="visually-hidden" id="videoFile" type="file" accept="video/*,.mkv,.webm">
+
+      <div class="divider"></div>
+      <div class="section-heading"><span class="step">02</span><div><h2>Votre bande-son</h2><p>Importez une piste ou reutilisez votre bibliotheque.</p></div></div>
+      <div class="tabs" role="tablist" aria-label="Source audio">
+        <button class="tab active" id="tabLibrary" role="tab" aria-selected="true" type="button">Bibliotheque</button>
+        <button class="tab" id="tabUpload" role="tab" aria-selected="false" type="button">Importer un audio</button>
+      </div>
+      <div id="libraryPane" class="library-pane"><label class="visually-hidden" for="libraryList">Pistes audio disponibles</label><div id="libraryList" class="library-list" role="radiogroup" aria-label="Pistes audio disponibles"><p class="empty">Chargement de la bibliotheque...</p></div><button id="refreshLibrary" class="text-button" type="button">&#8635; Actualiser</button></div>
+      <div id="uploadPane" class="upload-pane" hidden>
+        <label class="file-drop compact" for="audioFile"><span class="file-icon">&#9835;</span><span class="file-copy"><strong id="audioName">Choisir un fichier audio</strong><small>La piste sera conservee dans la bibliotheque (max. 20 min)</small></span><span class="file-action">Choisir</span></label>
+        <input class="visually-hidden" id="audioFile" type="file" accept="audio/*,.m4a,.mp3,.wav,.aac,.flac,.ogg">
+        <label class="field-label" for="audioTitle">Nom dans la bibliotheque <span class="optional">facultatif</span></label>
+        <input class="text-input" id="audioTitle" type="text" maxlength="120" placeholder="Ex. Balade au coucher du soleil">
+      </div>
+
+      <div class="divider"></div>
+      <div class="volume-heading"><div><h2>Niveau sonore</h2><p>Ajustez le volume de la bande-son.</p></div><output id="volumeValue" for="volume">100%</output></div>
+      <input id="volume" class="range" type="range" min="0" max="200" value="100" step="1" aria-label="Volume audio en pourcentage">
+      <div class="range-labels"><span>0%</span><span>100%</span><span>200%</span></div>
+      <button id="generate" class="button primary" type="button"><span>Generer &amp; lire le mix</span><span aria-hidden="true">&#8599;</span></button>
+      <p class="fine-print">Utilisez uniquement des medias que vous etes autorise a traiter.</p>
+    </section>
+
+    <!-- ===== YOUTUBE MODE ===== -->
+    <section class="panel form-panel" id="youtubeModePane" hidden aria-labelledby="ytTitle">
+      <div class="section-heading"><span class="step yt">YT</span><div><h2 id="ytTitle">Video YouTube</h2><p>Extrait le flux directement via yt-dlp cote backend.</p></div></div>
+      <label class="field-label" for="ytVideoUrl">URL de la video <span class="optional">flux video H.264</span></label>
+      <input class="text-input" id="ytVideoUrl" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" spellcheck="false">
+
+      <div class="divider"></div>
+      <div class="section-heading"><span class="step yt">YT</span><div><h2>Bande-son YouTube</h2><p>URL du son a remplacer. Ou reutilisez la bibliotheque.</p></div></div>
+      <div class="tabs" role="tablist" aria-label="Source audio YouTube">
+        <button class="tab active" id="ytTabUrlAudio" role="tab" aria-selected="true" type="button">URL YouTube</button>
+        <button class="tab" id="ytTabLibraryAudio" role="tab" aria-selected="false" type="button">Bibliotheque</button>
+      </div>
+      <!-- URL audio sub-pane -->
+      <div id="ytUrlAudioPane">
+        <label class="field-label" for="ytAudioUrl">URL de l'audio <span class="optional">meilleur flux AAC</span></label>
+        <input class="text-input" id="ytAudioUrl" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" spellcheck="false">
+        <label class="field-label" for="ytSaveAudio">
+          <input type="checkbox" id="ytSaveAudio" style="margin-right:6px">
+          Sauvegarder cet audio dans la bibliotheque
+        </label>
+        <div id="ytSaveAudioFields" hidden style="margin-top:8px">
+          <label class="field-label" for="ytAudioTitle">Nom dans la bibliotheque <span class="optional">facultatif</span></label>
+          <input class="text-input" id="ytAudioTitle" type="text" maxlength="120" placeholder="Ex. Ambiance zen">
+        </div>
+      </div>
+      <!-- Library sub-pane -->
+      <div id="ytLibraryPane" class="library-pane" hidden>
+        <div id="ytLibraryList" class="library-list" role="radiogroup" aria-label="Pistes audio disponibles"><p class="empty">Chargement...</p></div>
+        <button id="ytRefreshLibrary" class="text-button" type="button">&#8635; Actualiser</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="volume-heading"><div><h2>Niveau sonore</h2><p>Ajustez le volume de la bande-son.</p></div><output id="ytVolumeValue" for="ytVolume">100%</output></div>
+      <input id="ytVolume" class="range" type="range" min="0" max="200" value="100" step="1" aria-label="Volume audio en pourcentage">
+      <div class="range-labels"><span>0%</span><span>100%</span><span>200%</span></div>
+      <button id="ytGenerate" class="button primary yt-button" type="button"><span>Generer via YouTube</span><span aria-hidden="true">&#8599;</span></button>
+      <p class="fine-print">Le traitement peut durer plusieurs minutes selon la connexion. Flux tronque a 20 min.</p>
+    </section>
+
+    <section id="progressPanel" class="panel progress-panel" hidden aria-live="polite">
+      <div class="progress-head"><span id="progressIcon" class="spinner" aria-hidden="true"></span><div><strong id="progressTitle">Preparation du mix...</strong><p id="progressText">Le traitement peut prendre quelques minutes.</p></div></div>
+      <div class="progress-track"><span></span></div>
+    </section>
+
+    <section id="resultPanel" class="panel result-panel" hidden>
+      <div class="section-heading"><span class="step done">&#10003;</span><div><h2>Votre mix est pret</h2><p id="resultSubtitle">Lecture optimisee pour les navigateurs mobiles.</p></div></div>
+      <video id="player" controls playsinline webkit-playsinline preload="metadata"></video>
+      <a id="downloadLink" class="button secondary download" href="#" download="studio-mix.mp4">Telecharger le MP4</a>
+      <p class="hint" id="expiryHint"></p>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <footer><span>STUDIOMIX</span><span>Vos medias, votre creation.</span></footer>
+  </main>
+</body>
+</html>
