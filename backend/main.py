@@ -209,6 +209,11 @@ def _ytdlp_base_opts(quiet: bool = False) -> dict:
         "quiet": quiet,
         "no_warnings": quiet,
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb"]
+            }
+        },
     }
 
 
@@ -224,12 +229,14 @@ def extract_video_stream(url: str) -> dict:
 
     opts = {
         **_ytdlp_base_opts(quiet=True),
-        # Best H.264 MP4 video -- no audio stream needed (we supply our own)
+        # Best H.264 MP4 video -- fallback to format 18 or any video stream
         "format": (
             "bestvideo[vcodec^=avc][ext=mp4]"
             "/bestvideo[ext=mp4]"
             "/bestvideo[vcodec^=avc]"
             "/bestvideo"
+            "/18"
+            "/best"
         ),
         "skip_download": True,
     }
@@ -241,8 +248,10 @@ def extract_video_stream(url: str) -> dict:
         msg = str(exc)
         if "Private video" in msg or "This video is private" in msg:
             raise RuntimeError("Video privee ou inaccessible.") from exc
-        if "Video unavailable" in msg or "has been removed" in msg:
-            raise RuntimeError("Video supprimee ou indisponible.") from exc
+        if "Video unavailable" in msg or "has been removed" in msg or "This video is unavailable" in msg:
+            raise RuntimeError("Video supprimee ou indisponible. Verifiez l'identifiant de la video.") from exc
+        if "Failed to extract any player response" in msg:
+            raise RuntimeError("Impossible d'extraire la video YouTube. Verifiez que l'URL est correcte (attention a la confusion entre le chiffre 0 et la lettre O).") from exc
         raise RuntimeError(f"Impossible d'extraire le flux video : {msg[:500]}") from exc
     except Exception as exc:
         raise RuntimeError(f"Erreur inattendue yt-dlp (video) : {str(exc)[:500]}") from exc
@@ -277,8 +286,8 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
 
     opts = {
         **_ytdlp_base_opts(quiet=False),
-        # Best M4A/AAC first, fallback to any audio
-        "format": "bestaudio[ext=m4a]/bestaudio",
+        # Best M4A/AAC first, fallback to any audio, fallback to format 18 (mp4 video+audio, FFmpeg strips video)
+        "format": "bestaudio[ext=m4a]/bestaudio/18/best",
         "outtmpl": raw_stem + ".%(ext)s",
         "max_filesize": YTDLP_MAX_FILESIZE,
         # No post-processing -- we handle that with FFmpeg ourselves
@@ -292,8 +301,10 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
         msg = str(exc)
         if "Private video" in msg or "This video is private" in msg:
             raise RuntimeError("Video privee ou inaccessible.") from exc
-        if "Video unavailable" in msg or "has been removed" in msg:
-            raise RuntimeError("Video supprimee ou indisponible.") from exc
+        if "Video unavailable" in msg or "has been removed" in msg or "This video is unavailable" in msg:
+            raise RuntimeError("Video supprimee ou indisponible. Verifiez l'identifiant de la video.") from exc
+        if "Failed to extract any player response" in msg:
+            raise RuntimeError("Impossible de lire les flux YouTube. Verifiez que l'URL est correcte (attention a la confusion entre le chiffre 0 et la lettre O).") from exc
         raise RuntimeError(f"Impossible de telecharger l'audio : {msg[:500]}") from exc
     except Exception as exc:
         raise RuntimeError(f"Erreur inattendue yt-dlp (audio) : {str(exc)[:500]}") from exc
@@ -306,7 +317,7 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
 
     # Find the downloaded file (yt-dlp chose the extension)
     downloaded: Path | None = None
-    for ext in ("m4a", "webm", "opus", "mp3", "aac", "ogg", "wav"):
+    for ext in ("m4a", "webm", "opus", "mp3", "aac", "ogg", "wav", "mp4", "mkv"):
         candidate = raw_output.with_suffix(f".{ext}")
         if candidate.is_file():
             downloaded = candidate
