@@ -231,7 +231,8 @@ def _ytdlp_base_opts(quiet: bool = False) -> dict:
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "extractor_args": {
             "youtube": {
-                "player_client": ["ios", "mweb", "android", "web"]
+                "player_client": ["ios", "mweb", "android", "web"],
+                "formats": ["missing_pot"],
             }
         },
     }
