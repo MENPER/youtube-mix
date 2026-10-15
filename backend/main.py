@@ -229,7 +229,7 @@ def _ytdlp_base_opts(quiet: bool = False) -> dict:
         "quiet": quiet,
         "no_warnings": quiet,
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
-        "js_runtimes": {"node": True},
+        "js_runtimes": {"node": {}},
         "extractor_args": {
             "youtube": {
                 "player_client": ["ios", "mweb", "android", "web"],
