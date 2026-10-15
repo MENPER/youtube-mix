@@ -423,6 +423,7 @@ def debug_formats(video_id: str = "WE8TinxNPb0"):
         f"https://www.youtube.com/watch?v={video_id}",
         "--list-formats",
         "-v",
+        "--js-runtimes", "node",
     ]
     cookie_path = init_cookies()
     if cookie_path and cookie_path.is_file():
