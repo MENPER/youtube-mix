@@ -229,7 +229,6 @@ def _ytdlp_base_opts(quiet: bool = False) -> dict:
         "quiet": quiet,
         "no_warnings": quiet,
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
-        "js_runtimes": {"node": {}},
         "extractor_args": {
             "youtube": {
                 "player_client": ["ios", "mweb", "android", "web"],
@@ -423,7 +422,7 @@ def debug_formats(video_id: str = "WE8TinxNPb0"):
         f"https://www.youtube.com/watch?v={video_id}",
         "--list-formats",
         "-v",
-        "--js-runtimes", "node",
+        "--extractor-args", "youtube:player_client=ios,mweb,android,web;formats=missing_pot",
     ]
     cookie_path = init_cookies()
     if cookie_path and cookie_path.is_file():

@@ -1,14 +1,17 @@
 FROM python:3.11-slim
 
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DATA_DIR=/data \
-    PORT=7860
+    PORT=7860 \
+    DENO_DIR=/home/app/.cache/deno
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg nodejs \
-    && (which node || ln -sf $(which nodejs) /usr/local/bin/node || true) \
+    && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
+    && chmod 755 /usr/local/bin/deno \
     && useradd --create-home --uid 1000 app
 
 WORKDIR /app
