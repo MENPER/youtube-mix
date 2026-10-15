@@ -26,10 +26,34 @@ FFMPEG = os.getenv("FFMPEG_BIN", "ffmpeg")
 FFPROBE = os.getenv("FFPROBE_BIN", "ffprobe")
 ALLOWED_ORIGINS = [x.strip() for x in os.getenv("CORS_ORIGINS", "*").split(",") if x.strip()]
 JOB_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT)
+MAX_DURATION = int(os.getenv("MAX_DURATION", "1200"))
+MAX_AUDIO_DURATION = int(os.getenv("MAX_AUDIO_DURATION", str(MAX_DURATION)))
 
 # --- yt-dlp constants ---
+def _parse_bytes(val: str | int | float | None) -> int | None:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return int(val)
+    val = str(val).strip().upper()
+    if not val:
+        return None
+    try:
+        if val.endswith("G") or val.endswith("GB"):
+            num = float(val.rstrip("GB").strip())
+            return int(num * 1024 * 1024 * 1024)
+        if val.endswith("M") or val.endswith("MB"):
+            num = float(val.rstrip("MB").strip())
+            return int(num * 1024 * 1024)
+        if val.endswith("K") or val.endswith("KB"):
+            num = float(val.rstrip("KB").strip())
+            return int(num * 1024)
+        return int(float(val))
+    except (ValueError, TypeError):
+        return None
+
 YTDLP_SOCKET_TIMEOUT = int(os.getenv("YTDLP_SOCKET_TIMEOUT", "30"))
-YTDLP_MAX_FILESIZE = os.getenv("YTDLP_MAX_FILESIZE", "2G")
+YTDLP_MAX_FILESIZE_BYTES = _parse_bytes(os.getenv("YTDLP_MAX_FILESIZE", "2G")) or (2 * 1024 * 1024 * 1024)
 
 # Regex to loosely validate a YouTube URL (public videos only)
 _YT_URL_RE = re.compile(
@@ -323,7 +347,7 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
         # Best audio stream, fallback to best overall stream (e.g. format 18)
         "format": "bestaudio/best",
         "outtmpl": raw_stem + ".%(ext)s",
-        "max_filesize": YTDLP_MAX_FILESIZE,
+        "max_filesize": int(YTDLP_MAX_FILESIZE_BYTES),
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "m4a",
@@ -354,8 +378,11 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
     if info is None:
         raise RuntimeError("yt-dlp n'a retourne aucune information pour cet audio.")
 
-    title = info.get("title", "Audio sans titre")
-    yt_duration = float(info.get("duration") or 0)
+    title = str(info.get("title") or "Audio sans titre")
+    duration = int(info.get("duration") or 0)
+    max_duration = int(MAX_DURATION)
+    if duration > 0 and duration > max_duration:
+        raise RuntimeError(f"La piste audio depasse la limite autorisee de {max_duration // 60} minutes ({duration}s > {max_duration}s).")
 
     # Find the downloaded file (yt-dlp chose the extension)
     downloaded: Path | None = None
@@ -378,18 +405,18 @@ def download_audio_to_library(url: str, audio_id: str) -> dict:
         run_command([
             FFMPEG, "-y", "-v", "error",
             "-i", str(downloaded),
-            "-t", "1200",
+            "-t", str(max_duration),
             "-vn", "-c:a", "aac", "-b:a", "192k", "-f", "ipod",
             str(normalized),
         ])
     finally:
         downloaded.unlink(missing_ok=True)
 
-    actual_duration = probe_duration(normalized)
+    actual_duration = float(probe_duration(normalized) or 0.0)
     return {
         "title": title[:120],
-        "duration_seconds": round(min(actual_duration, 1200.0), 2),
-        "yt_duration": yt_duration,
+        "duration_seconds": round(min(actual_duration, float(max_duration)), 2),
+        "yt_duration": float(duration),
     }
 
 
@@ -516,12 +543,15 @@ async def process_mix(
             finally:
                 raw_audio.unlink(missing_ok=True)
         async with JOB_SEMAPHORE:
-            video_duration, audio_duration = await asyncio.gather(
+            video_duration_raw, audio_duration_raw = await asyncio.gather(
                 asyncio.to_thread(probe_duration, video_path),
                 asyncio.to_thread(probe_duration, audio_path),
             )
-            if audio_duration > 1200.5:
-                raise RuntimeError("La piste audio depasse la limite de 20 minutes")
+            video_duration = float(video_duration_raw or 0.0)
+            audio_duration = float(audio_duration_raw or 0.0)
+            max_duration = float(MAX_DURATION)
+            if audio_duration > (max_duration + 0.5):
+                raise RuntimeError(f"La piste audio depasse la limite de {int(max_duration // 60)} minutes")
             await asyncio.to_thread(run_command, [
                 FFMPEG, "-y", "-v", "error", "-i", str(video_path), "-stream_loop", "-1", "-i", str(audio_path),
                 "-map", "0:v:0", "-map", "1:a:0", "-t", f"{video_duration:.3f}", "-c:v", "libx264", "-preset", "veryfast",
@@ -663,9 +693,10 @@ async def youtube_process(body: YoutubeProcessRequest):
 
         # Step 3: FFmpeg mix
         async with JOB_SEMAPHORE:
-            audio_duration = await asyncio.to_thread(probe_duration, audio_path)
-            if audio_duration > 1200.5:
-                raise HTTPException(422, "La piste audio depasse la limite de 20 minutes")
+            audio_duration = float(await asyncio.to_thread(probe_duration, audio_path) or 0.0)
+            max_duration = float(MAX_DURATION)
+            if audio_duration > (max_duration + 0.5):
+                raise HTTPException(422, f"La piste audio depasse la limite de {int(max_duration // 60)} minutes")
 
             # FFmpeg reads video directly from the yt-dlp stream URL
             await asyncio.to_thread(run_command, [
@@ -675,8 +706,8 @@ async def youtube_process(body: YoutubeProcessRequest):
                 # Audio: local normalised file, looped if needed
                 "-stream_loop", "-1", "-i", str(audio_path),
                 "-map", "0:v:0", "-map", "1:a:0",
-                # Truncate output at 20 min
-                "-t", "1200",
+                # Truncate output at max_duration
+                "-t", str(int(max_duration)),
                 # Video codec: H.264 for maximum iOS compatibility
                 "-c:v", "libx264", "-preset", "veryfast",
                 "-pix_fmt", "yuv420p",
